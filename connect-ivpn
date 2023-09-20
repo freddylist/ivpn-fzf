@@ -1,0 +1,19 @@
+#!/bin/sh
+
+# Make sure /etc/wireguard is readable by your user
+# (for example, if you are in the "wheel" group, `chown root:wheel /etc/wireguard && chmod g+rx /etc/wireguard`)
+SERVERS="$(ls /etc/wireguard | sed 's/\.conf//' | jq --raw-input | jq --slurp)"
+
+# Don't connect if there is already an interface
+[ -n "$(ifconfig | grep '^[^-]*-[gw][gw]:')" ] && echo 1>&2 "no" && exit 1
+
+curl -sL https://api.ivpn.net/v4/servers/stats \
+	| jq --argjson servers "$SERVERS" --raw-output '.servers 
+		| map(.gateway |= sub(".ivpn.net"; ""))
+		| map(.gateway |= gsub("[.]"; "-"))
+		| map(select((.gateway | IN($servers[])) and .is_active and (.in_maintenance | not) and (.hostnames.wireguard != null)))
+		| sort_by(.load)
+		| map("\(.city), \(.country) (\(.gateway), \(.load)% load)")[]' \
+	| fzf --no-sort \
+	| sed -e 's/.*(\([^,]*\).*/\1/' \
+	| xargs doas wg-quick up

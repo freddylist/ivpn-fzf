@@ -1,0 +1,7 @@
+#!/bin/sh
+
+IF_NAME="$(ifconfig | sed -ne 's/\(^[^-]*-[gw][gw]\).*/\1/p')"
+
+[ -z "$IF_NAME" ] && exit 1
+
+doas wg-quick down "$IF_NAME"
